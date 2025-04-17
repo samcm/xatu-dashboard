@@ -26,12 +26,12 @@ def render_summary_section(data):
     # Observations
     with col2:
         total_observations = raw_df.shape[0]
-        st.metric("Total Observations", total_observations)
+        st.metric("Total Events", total_observations)
     
     # Avg observations per block
     with col3:
         avg_observations = round(total_observations / unique_blocks, 2)
-        st.metric("Avg Observers per Block", avg_observations)
+        st.metric("Avg Events per Block", avg_observations)
     
     # Median propagation time
     with col4:

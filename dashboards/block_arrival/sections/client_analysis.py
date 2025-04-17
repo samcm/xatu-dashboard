@@ -104,20 +104,33 @@ def render_client_analysis_section(data):
                 client_data = clients_data.filter(pl.col("meta_consensus_implementation") == client)
                 
                 if client_data.shape[0] > 0:
-                    # Get propagation times
-                    times = client_data.select("capped_diff_ms").to_series().to_list()
+                    # Get propagation times and round to nearest 50ms
+                    times = client_data.select(
+                        (pl.col("capped_diff_ms").round(0) / 50).round(0) * 50
+                    ).to_series().to_list()
                     times.sort()
                     
-                    # Create cumulative distribution
-                    cdf = []
+                    # Create cumulative distribution with binning
+                    unique_times = []
+                    percentiles = []
+                    
+                    current_time = None
                     for i, time in enumerate(times):
-                        cdf.append({
+                        if time != current_time:
+                            unique_times.append(time)
+                            percentiles.append((i + 1) / len(times))
+                            current_time = time
+                        elif i == len(times) - 1:
+                            # Always include the last percentile
+                            percentiles[-1] = (i + 1) / len(times)
+                    
+                    # Create final CDF data points
+                    for i, (time, pct) in enumerate(zip(unique_times, percentiles)):
+                        cdf_data.append({
                             "client": client,
                             "propagation_ms": time,
-                            "percentile": (i + 1) / len(times)
+                            "percentile": pct
                         })
-                    
-                    cdf_data.extend(cdf)
             
             # Convert to pandas for visualization
             if cdf_data:
@@ -153,38 +166,7 @@ def render_client_analysis_section(data):
                 final_chart = cdf_chart + p50_rule + p90_rule
                 
                 st.altair_chart(final_chart, use_container_width=True)
-                
-                # Add optimization - for performance, also create a sampled version for smoother rendering
-                if any(cdf_df.groupby('client').size() > 1000):
-                    st.info("Creating a sampled version of the CDF for smoother rendering...")
-                    
-                    # Create sampled version for each client (100 points per client)
-                    sampled_data = []
-                    for client in top_clients:
-                        client_cdf = cdf_df[cdf_df['client'] == client]
-                        if len(client_cdf) > 100:
-                            # Take 100 evenly spaced samples
-                            indices = np.linspace(0, len(client_cdf)-1, 100).astype(int)
-                            sampled_data.append(client_cdf.iloc[indices])
-                        else:
-                            sampled_data.append(client_cdf)
-                    
-                    sampled_cdf = pd.concat(sampled_data)
-                    
-                    # Create the sampled CDF chart
-                    sampled_chart = alt.Chart(sampled_cdf).mark_line().encode(
-                        x=alt.X('propagation_ms:Q', title='Propagation Time (ms)'),
-                        y=alt.Y('percentile:Q', title='Cumulative Probability', scale=alt.Scale(domain=[0, 1])),
-                        color=alt.Color('client:N', title='Client Implementation'),
-                        tooltip=['client', 'propagation_ms', 'percentile']
-                    ).properties(
-                        title='CDF of Block Arrival Times by Client Implementation (Sampled for Performance)',
-                        width=600,
-                        height=400
-                    )
-                    
-                    st.altair_chart(sampled_chart, use_container_width=True)
-                
+
                 # Show key percentiles table
                 st.subheader("Key Block Arrival Percentiles by Client Implementation")
                 
@@ -230,23 +212,12 @@ def render_client_analysis_section(data):
         
         # Filter out countries with too few samples
         geo_perf = geo_perf.filter(pl.col("sample_count") > max(10, raw_df.shape[0] * 0.01))
-        
-        # Display tables in columns
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Observations by Country")
-            st.dataframe(geo_counts.to_pandas())
-            
-        with col2:
-            st.subheader("Propagation by Country")
-            st.dataframe(geo_perf.to_pandas())
-        
+
         # CDF of propagation times by country
-        st.subheader("Block Arrival Time CDF by Country")
+        st.subheader("Block Arrival Time CDF by Top 20 Country")
         
         # Get top countries by observation count
-        top_countries = geo_counts.head(5).select("meta_client_geo_country").to_series().to_list()
+        top_countries = geo_counts.head(10).select("meta_client_geo_country").to_series().to_list()
         
         # Filter data to top countries
         countries_data = raw_df.filter(pl.col("meta_client_geo_country").is_in(top_countries))
@@ -260,20 +231,33 @@ def render_client_analysis_section(data):
                 country_data = countries_data.filter(pl.col("meta_client_geo_country") == country)
                 
                 if country_data.shape[0] > 0:
-                    # Get propagation times
-                    times = country_data.select("capped_diff_ms").to_series().to_list()
+                    # Get propagation times and round to nearest 50ms
+                    times = country_data.select(
+                        (pl.col("capped_diff_ms").round(0) / 50).round(0) * 50
+                    ).to_series().to_list()
                     times.sort()
                     
-                    # Create cumulative distribution
-                    cdf = []
+                    # Create cumulative distribution with binning
+                    unique_times = []
+                    percentiles = []
+                    
+                    current_time = None
                     for i, time in enumerate(times):
-                        cdf.append({
+                        if time != current_time:
+                            unique_times.append(time)
+                            percentiles.append((i + 1) / len(times))
+                            current_time = time
+                        elif i == len(times) - 1:
+                            # Always include the last percentile
+                            percentiles[-1] = (i + 1) / len(times)
+                    
+                    # Create final CDF data points
+                    for i, (time, pct) in enumerate(zip(unique_times, percentiles)):
+                        cdf_data.append({
                             "country": country,
                             "propagation_ms": time,
-                            "percentile": (i + 1) / len(times)
+                            "percentile": pct
                         })
-                    
-                    cdf_data.extend(cdf)
             
             # Convert to pandas for visualization
             if cdf_data:
@@ -309,38 +293,7 @@ def render_client_analysis_section(data):
                 final_chart = cdf_chart + p50_rule + p90_rule
                 
                 st.altair_chart(final_chart, use_container_width=True)
-                
-                # Add optimization - for performance, also create a sampled version for smoother rendering
-                if any(cdf_df.groupby('country').size() > 1000):
-                    st.info("Creating a sampled version of the CDF for smoother rendering...")
-                    
-                    # Create sampled version for each country (100 points per country)
-                    sampled_data = []
-                    for country in top_countries:
-                        country_cdf = cdf_df[cdf_df['country'] == country]
-                        if len(country_cdf) > 100:
-                            # Take 100 evenly spaced samples
-                            indices = np.linspace(0, len(country_cdf)-1, 100).astype(int)
-                            sampled_data.append(country_cdf.iloc[indices])
-                        else:
-                            sampled_data.append(country_cdf)
-                    
-                    sampled_cdf = pd.concat(sampled_data)
-                    
-                    # Create the sampled CDF chart
-                    sampled_chart = alt.Chart(sampled_cdf).mark_line().encode(
-                        x=alt.X('propagation_ms:Q', title='Propagation Time (ms)'),
-                        y=alt.Y('percentile:Q', title='Cumulative Probability', scale=alt.Scale(domain=[0, 1])),
-                        color=alt.Color('country:N', title='Country'),
-                        tooltip=['country', 'propagation_ms', 'percentile']
-                    ).properties(
-                        title='CDF of Block Arrival Times by Country (Sampled for Performance)',
-                        width=600,
-                        height=400
-                    )
-                    
-                    st.altair_chart(sampled_chart, use_container_width=True)
-                
+
                 # Show key percentiles table
                 st.subheader("Key Block Arrival Percentiles by Country")
                 

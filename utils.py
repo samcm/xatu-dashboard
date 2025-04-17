@@ -103,6 +103,58 @@ def load_xatu_data(network, table, date, use_cache=True):
         logger.error(f"Error downloading {network}_{table}: {str(e)}")
         return None
 
+def load_xatu_data_range(network, table, start_date, end_date, use_cache=True, progress_callback=None):
+    """Load data from Xatu parquet files for a date range
+    
+    Args:
+        network: Network name
+        table: Table name
+        start_date: Start date (inclusive)
+        end_date: End date (inclusive)
+        use_cache: Whether to use cached data
+        progress_callback: Optional callback function to update progress
+        
+    Returns:
+        Combined polars DataFrame or None if no data is available
+    """
+    if start_date is None or end_date is None:
+        raise ValueError("Start and end dates must be provided")
+    
+    if start_date > end_date:
+        raise ValueError("Start date must be before or equal to end date")
+    
+    dfs = []
+    total_days = (end_date - start_date).days + 1
+    days_processed = 0
+    
+    # Iterate through each day in the range
+    current_date = start_date
+    while current_date <= end_date:
+        if progress_callback:
+            progress_callback(days_processed / total_days)
+        
+        logger.info(f"Loading data for {current_date.isoformat()}")
+        df = load_xatu_data(network, table, current_date, use_cache=use_cache)
+        
+        if df is not None and len(df) > 0:
+            dfs.append(df)
+        
+        current_date += timedelta(days=1)
+        days_processed += 1
+    
+    # Combine all dataframes
+    if dfs:
+        try:
+            combined_df = pl.concat(dfs)
+            logger.info(f"Combined data: {len(combined_df)} rows")
+            return combined_df
+        except Exception as e:
+            logger.error(f"Error combining dataframes: {str(e)}")
+            return None
+    else:
+        logger.warning(f"No data available for the date range {start_date.isoformat()} to {end_date.isoformat()}")
+        return None
+
 def format_ms(ms):
     """Format milliseconds for display"""
     return f"{ms:.2f}ms" 
