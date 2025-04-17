@@ -22,6 +22,16 @@ DASHBOARDS = {
         "icon": "📦",
         "description": "Analyze block propagation times across different networks and clients"
     },
+    "Xatu User Deep Dive": {
+        "module": "user_deep_dive",
+        "icon": "👤",
+        "description": "Analyze data from individual Xatu users and their nodes"
+    },
+    "Node Deep Dive": {
+        "module": "node_deep_dive",
+        "icon": "🖥️",
+        "description": "Detailed metrics and performance data for individual nodes"
+    }
 }
 
 # Xatu API base URL

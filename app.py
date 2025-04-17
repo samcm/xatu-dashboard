@@ -38,6 +38,8 @@ if "current_dashboard" not in st.session_state:
             st.session_state.current_dashboard = "Home"
         elif dashboard_name in DASHBOARDS:
             st.session_state.current_dashboard = dashboard_name
+        elif dashboard_name == "xatu-user-deep-dive":
+            st.session_state.current_dashboard = "Xatu User Deep Dive"
         else:
             st.session_state.current_dashboard = "Home"
     else:
@@ -69,7 +71,7 @@ st.markdown("""
 
 # Sidebar with dashboard selection
 # Add Xatu logo, centered
-st.sidebar.image("assets/ethpandaops.png", caption="Powered by Xatu")
+st.sidebar.image("assets/ethpandaops.png", caption="Powered by ethPandaOps")
 st.sidebar.title("Xatu Dashboards")
 
 # Create dashboard links
