@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Overview
+Provides a single Streamlit page that has multiple dashboards on their own page using data from Xatu using Parquet files. 
+
+## Features
+- Top level config that allows me to set things once across the entire app, like the networks supported. 
+- A list of dashboards in the sidebar
+- Beatiful dashboards with unique insights
+- Uses Polars exclusively.
+- Each dashboard should define how frequently it refreshes. By default we want to refresh every 3 hours, and support time windows of `-7d`, `-31d`, `-90d`. In local dev mode I should be able to force a refresh.
+- Adhere to DRY principles. Create libraries for shared functionality. Important: check if something has been implemented before implementing a shared library.

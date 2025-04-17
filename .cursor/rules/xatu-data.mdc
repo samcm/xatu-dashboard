@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Loading Xatu Data
+WHENEVER you need xatu data, lookup how to get/interact with the data from https://raw.githubusercontent.com/ethpandaops/xatu-data/refs/heads/master/llms.txt
+Data can be fetched by running a curl. It's HIGHLY recommended that you look up the table schema by running another curl to get the full column types and descriptions to fully understand how to use the data accurately.
+
+## Parquet files
+We fetch data from parquet files. When running in local dev modes, we should stop the parquets we download in to `data` (.gitignored) as a thin cache. Production should just load straight from the parquet in memory.
