@@ -1,4 +1,5 @@
 streamlit
 polars
 requests
-altair 
+plotly
+altair

@@ -5,6 +5,7 @@ import logging
 import urllib.parse
 from utils import load_xatu_data, load_xatu_data_range
 from config import SUPPORTED_NETWORKS, TIME_WINDOWS, DEFAULT_REFRESH_TIME
+from chart_utils import create_themed_histogram, create_themed_line
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -194,68 +195,69 @@ def render_node_overview(node_df, node_id):
     
     st.subheader("Node Overview")
     
-    # Basic stats
-    col1, col2, col3 = st.columns(3)
-    
-    # Get node location
-    location = "Location Redacted"
-    if "meta_client_geo_city" in node_df.columns and "meta_client_geo_country_code" in node_df.columns:
-        city = node_df.select("meta_client_geo_city").head(1).item()
-        country = node_df.select("meta_client_geo_country_code").head(1).item()
+    with st.container():
+        # Basic stats
+        col1, col2, col3 = st.columns(3)
         
-        if city and city != "REDACTED" and country:
-            location = f"{city}, {country}"
-    
-    # Client implementation
-    implementation = "Unknown"
-    if "meta_consensus_implementation" in node_df.columns:
-        impl = node_df.select("meta_consensus_implementation").head(1).item()
-        if impl:
-            implementation = impl
-    
-    # Client version
-    version = "Unknown"
-    if "meta_consensus_version" in node_df.columns:
-        ver = node_df.select("meta_consensus_version").head(1).item()
-        if ver:
-            version = ver
-    
-    # Node name/ID from meta_client_name
-    node_name = "Unknown"
-    if "node_id" in node_df.columns:
-        nid = node_df.select("node_id").head(1).item()
-        if nid:
-            node_name = nid
-    
-    # Username
-    username = "Unknown"
-    if "username" in node_df.columns:
-        uname = node_df.select("username").head(1).item()
-        if uname:
-            username = uname
-    
-    # Display stats
-    with col1:
-        st.metric("Client", implementation)
-    
-    with col2:
-        st.metric("Version", version)
-    
-    with col3:
-        st.metric("Total Events", node_df.height)
-    
-    # Extra info
-    st.markdown(f"**Node Name:** {node_name}")
-    st.markdown(f"**Location:** {location}")
-    st.markdown(f"**User:** {username}")
-    
-    # Network provider
-    if "meta_client_geo_autonomous_system_organization" in node_df.columns:
-        asn = node_df.select("meta_client_geo_autonomous_system_organization").head(1).item()
-        if asn and asn != "REDACTED":
-            st.markdown(f"**Network Provider:** {asn}")
-        else:
-            st.markdown("**Network Provider:** ASN Redacted")
+        # Get node location
+        location = "Location Redacted"
+        if "meta_client_geo_city" in node_df.columns and "meta_client_geo_country_code" in node_df.columns:
+            city = node_df.select("meta_client_geo_city").head(1).item()
+            country = node_df.select("meta_client_geo_country_code").head(1).item()
+            
+            if city and city != "REDACTED" and country:
+                location = f"{city}, {country}"
+        
+        # Client implementation
+        implementation = "Unknown"
+        if "meta_consensus_implementation" in node_df.columns:
+            impl = node_df.select("meta_consensus_implementation").head(1).item()
+            if impl:
+                implementation = impl
+        
+        # Client version
+        version = "Unknown"
+        if "meta_consensus_version" in node_df.columns:
+            ver = node_df.select("meta_consensus_version").head(1).item()
+            if ver:
+                version = ver
+        
+        # Node name/ID from meta_client_name
+        node_name = "Unknown"
+        if "node_id" in node_df.columns:
+            nid = node_df.select("node_id").head(1).item()
+            if nid:
+                node_name = nid
+        
+        # Username
+        username = "Unknown"
+        if "username" in node_df.columns:
+            uname = node_df.select("username").head(1).item()
+            if uname:
+                username = uname
+        
+        # Display stats
+        with col1:
+            st.metric("Client", implementation)
+        
+        with col2:
+            st.metric("Version", version)
+        
+        with col3:
+            st.metric("Total Events", node_df.height)
+        
+        # Extra info
+        st.markdown(f"**Node Name:** {node_name}")
+        st.markdown(f"**Location:** {location}")
+        st.markdown(f"**User:** {username}")
+        
+        # Network provider
+        if "meta_client_geo_autonomous_system_organization" in node_df.columns:
+            asn = node_df.select("meta_client_geo_autonomous_system_organization").head(1).item()
+            if asn and asn != "REDACTED":
+                st.markdown(f"**Network Provider:** {asn}")
+            else:
+                st.markdown("**Network Provider:** ASN Redacted")
 
 def render_performance_metrics(node_df):
     """Render performance metrics for the node"""
@@ -264,84 +266,86 @@ def render_performance_metrics(node_df):
     
     st.subheader("Performance Metrics")
     
-    # For block events, analyze propagation times
-    if "propagation_slot_start_diff" in node_df.columns:
-        # Calculate stats for propagation time
-        prop_metrics = node_df.select([
-            pl.min("propagation_slot_start_diff").alias("min"),
-            pl.mean("propagation_slot_start_diff").alias("mean"),
-            pl.median("propagation_slot_start_diff").alias("median"),
-            pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
-        ])
-        
-        # Display metrics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Min Propagation", f"{prop_metrics.item(0, 'min'):.2f}ms")
-        
-        with col2:
-            st.metric("Mean Propagation", f"{prop_metrics.item(0, 'mean'):.2f}ms")
-        
-        with col3:
-            st.metric("Median Propagation", f"{prop_metrics.item(0, 'median'):.2f}ms")
-        
-        with col4:
-            st.metric("P90 Propagation", f"{prop_metrics.item(0, 'p90'):.2f}ms")
-        
-        # Create a histogram of propagation times
-        try:
-            # Try to import required libraries
-            import pandas as pd
+    with st.container():
+        # For block events, analyze propagation times
+        if "propagation_slot_start_diff" in node_df.columns:
+            # Calculate stats for propagation time
+            prop_metrics = node_df.select([
+                pl.min("propagation_slot_start_diff").alias("min"),
+                pl.mean("propagation_slot_start_diff").alias("mean"),
+                pl.median("propagation_slot_start_diff").alias("median"),
+                pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
+            ])
             
-            # Check if plotly is available
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Min Propagation", f"{prop_metrics.item(0, 'min'):.2f}ms")
+            
+            with col2:
+                st.metric("Mean Propagation", f"{prop_metrics.item(0, 'mean'):.2f}ms")
+            
+            with col3:
+                st.metric("Median Propagation", f"{prop_metrics.item(0, 'median'):.2f}ms")
+            
+            with col4:
+                st.metric("P90 Propagation", f"{prop_metrics.item(0, 'p90'):.2f}ms")
+            
+            # Create a histogram of propagation times
             try:
-                import plotly.express as px
-                has_plotly = True
-            except ImportError:
-                has_plotly = False
-                st.warning("Plotly is not installed. Install with: `pip install plotly`")
-            
-            if has_plotly:
-                # Prepare the data - limit to reasonable values for better visualization
-                prop_df = node_df.filter(pl.col("propagation_slot_start_diff") < 5000) \
-                            .select("propagation_slot_start_diff") \
-                            .to_pandas()
+                # Try to import required libraries
+                import pandas as pd
                 
-                # Create histogram
+                # Check if plotly is available
                 try:
-                    fig = px.histogram(
-                        prop_df, 
-                        x="propagation_slot_start_diff",
-                        nbins=50,
-                        labels={"propagation_slot_start_diff": "Propagation Time (ms)"},
-                        title="Distribution of Block Propagation Times"
-                    )
+                    import plotly.express as px
+                    has_plotly = True
+                except ImportError:
+                    has_plotly = False
+                    st.warning("Plotly is not installed. Install with: `pip install plotly`")
+                
+                if has_plotly:
+                    # Prepare the data - limit to reasonable values for better visualization
+                    prop_df = node_df.filter(pl.col("propagation_slot_start_diff") < 5000) \
+                                .select("propagation_slot_start_diff") \
+                                .to_pandas()
                     
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as plot_error:
-                    st.error(f"Error creating plot: {str(plot_error)}")
-                    logger.error(f"Plot error: {str(plot_error)}")
-            else:
-                # Fallback to showing summary stats if no plotly
-                st.write("Propagation time distribution summary:")
-                percentiles = node_df.select([
-                    pl.quantile("propagation_slot_start_diff", 0.1).alias("p10"),
-                    pl.quantile("propagation_slot_start_diff", 0.25).alias("p25"),
-                    pl.quantile("propagation_slot_start_diff", 0.5).alias("p50"),
-                    pl.quantile("propagation_slot_start_diff", 0.75).alias("p75"),
-                    pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
-                    pl.quantile("propagation_slot_start_diff", 0.95).alias("p95"),
-                    pl.quantile("propagation_slot_start_diff", 0.99).alias("p99"),
-                ])
-                
-                st.dataframe(percentiles.to_pandas())
-                
-        except Exception as e:
-            logger.error(f"Error creating propagation histogram: {str(e)}")
-            st.error(f"Error creating propagation histogram: {str(e)}")
-    else:
-        st.info("No propagation metrics available in the data")
+                    # Create histogram
+                    try:
+                        fig = create_themed_histogram(
+                            prop_df,
+                            x="propagation_slot_start_diff",
+                            nbins=50,
+                            title="Distribution of Block Propagation Times",
+                            xaxis_title="Propagation Time (ms)",
+                            yaxis_title="Count"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    except Exception as plot_error:
+                        st.error(f"Error creating plot: {str(plot_error)}")
+                        logger.error(f"Plot error: {str(plot_error)}")
+                else:
+                    # Fallback to showing summary stats if no plotly
+                    st.write("Propagation time distribution summary:")
+                    percentiles = node_df.select([
+                        pl.quantile("propagation_slot_start_diff", 0.1).alias("p10"),
+                        pl.quantile("propagation_slot_start_diff", 0.25).alias("p25"),
+                        pl.quantile("propagation_slot_start_diff", 0.5).alias("p50"),
+                        pl.quantile("propagation_slot_start_diff", 0.75).alias("p75"),
+                        pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
+                        pl.quantile("propagation_slot_start_diff", 0.95).alias("p95"),
+                        pl.quantile("propagation_slot_start_diff", 0.99).alias("p99"),
+                    ])
+                    
+                    st.dataframe(percentiles.to_pandas())
+                    
+            except Exception as e:
+                logger.error(f"Error creating propagation histogram: {str(e)}")
+                st.error(f"Error creating propagation histogram: {str(e)}")
+        else:
+            st.info("No propagation metrics available in the data")
 
 def render_timeline(node_df):
     """Render a timeline of node activity"""
@@ -350,62 +354,64 @@ def render_timeline(node_df):
     
     st.subheader("Activity Timeline")
     
-    try:
-        # Group data by date to see activity over time
-        if "meta_received_at" in node_df.columns:
-            # Make sure we safely convert the timestamp column
-            try:
-                date_df = node_df.with_columns(
-                    pl.col("meta_received_at").cast(pl.Datetime).dt.date().alias("date")
-                ).group_by("date").agg(
-                    pl.count().alias("events")
-                ).sort("date")
-            except Exception as e:
-                logger.error(f"Error converting timestamps: {str(e)}")
-                # Fallback for string timestamps
+    with st.container():
+        try:
+            # Group data by date to see activity over time
+            if "meta_received_at" in node_df.columns:
+                # Make sure we safely convert the timestamp column
                 try:
                     date_df = node_df.with_columns(
-                        pl.col("meta_received_at").str.strptime(pl.Datetime, "%Y-%m-%dT%H:%M:%S").dt.date().alias("date")
+                        pl.col("meta_received_at").cast(pl.Datetime).dt.date().alias("date")
                     ).group_by("date").agg(
                         pl.count().alias("events")
                     ).sort("date")
-                except Exception as inner_e:
-                    logger.error(f"Failed to parse timestamps: {str(inner_e)}")
-                    st.error("Unable to process timestamp data for timeline")
-                    return
-            
-            # Check if plotly is available
-            try:
-                import plotly.express as px
-                has_plotly = True
-            except ImportError:
-                has_plotly = False
-                st.warning("Plotly is not installed for timeline visualization")
-            
-            if has_plotly and date_df.height > 0:
-                # Convert to pandas for plotting
-                date_pd = date_df.to_pandas()
+                except Exception as e:
+                    logger.error(f"Error converting timestamps: {str(e)}")
+                    # Fallback for string timestamps
+                    try:
+                        date_df = node_df.with_columns(
+                            pl.col("meta_received_at").str.strptime(pl.Datetime, "%Y-%m-%dT%H:%M:%S").dt.date().alias("date")
+                        ).group_by("date").agg(
+                            pl.count().alias("events")
+                        ).sort("date")
+                    except Exception as inner_e:
+                        logger.error(f"Failed to parse timestamps: {str(inner_e)}")
+                        st.error("Unable to process timestamp data for timeline")
+                        return
                 
-                # Create line chart
-                fig = px.line(
-                    date_pd,
-                    x="date",
-                    y="events",
-                    title="Node Activity Over Time",
-                    labels={"date": "Date", "events": "Number of Events"}
-                )
+                # Check if plotly is available
+                try:
+                    import plotly.express as px
+                    has_plotly = True
+                except ImportError:
+                    has_plotly = False
+                    st.warning("Plotly is not installed for timeline visualization")
                 
-                st.plotly_chart(fig, use_container_width=True)
+                if has_plotly and date_df.height > 0:
+                    # Convert to pandas for plotting
+                    date_pd = date_df.to_pandas()
+                    
+                    # Create line chart
+                    fig = create_themed_line(
+                        date_pd,
+                        x="date",
+                        y="events",
+                        title="Node Activity Over Time",
+                        xaxis_title="Date",
+                        yaxis_title="Number of Events"
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    # Fallback to table view
+                    st.write("Daily event counts:")
+                    st.dataframe(date_df.to_pandas())
             else:
-                # Fallback to table view
-                st.write("Daily event counts:")
-                st.dataframe(date_df.to_pandas())
-        else:
-            st.info("No timestamp data available for timeline")
-    
-    except Exception as e:
-        logger.error(f"Error creating timeline: {str(e)}")
-        st.error(f"Error creating timeline: {str(e)}")
+                st.info("No timestamp data available for timeline")
+        
+        except Exception as e:
+            logger.error(f"Error creating timeline: {str(e)}")
+            st.error(f"Error creating timeline: {str(e)}")
 
 def render(force_refresh=False):
     """Render the node deep dive dashboard"""
@@ -470,8 +476,12 @@ def render(force_refresh=False):
         # Overview
         render_node_overview(node_df, node_id)
         
+        st.divider()
+        
         # Timeline
         render_timeline(node_df)
+        
+        st.divider()
         
         # Performance metrics
         render_performance_metrics(node_df)

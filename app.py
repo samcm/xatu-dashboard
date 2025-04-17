@@ -9,8 +9,18 @@ from config import (
     DASHBOARDS, DEFAULT_TIME_WINDOW_INDEX
 )
 
+# Function to load custom CSS
+def load_css(file_name):
+    with open(Path("assets") / file_name) as f:
+        css_content = f.read()
+    return css_content
+
 # Set page config
 st.set_page_config(page_title="Xatu Dashboard", layout="wide")
+
+# Load custom CSS
+css = load_css("style.css")
+st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 # Get URL parameters
 query_params = st.query_params
@@ -148,68 +158,71 @@ st.sidebar.markdown("*Xatu Dashboard v0.1*")
 # Render the selected dashboard
 current_dashboard = st.session_state.current_dashboard
 if current_dashboard == "Home":
-    # Dashboard cards section
-    st.markdown("## Available Dashboards")
+    with st.container():
+        # Dashboard cards section
+        st.markdown("## Available Dashboards")
+        
+        # Custom CSS for better cards
+        st.markdown("""
+        <style>
+        .dashboard-card {
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            margin: 10px 0;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+        }
+        .dashboard-card h3 {
+            color: #1E88E5;
+            margin-bottom: 10px;
+        }
+        .dashboard-card p {
+            color: #616161;
+            margin-bottom: 15px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Create a grid of dashboard cards
+        cols = st.columns(3)
+        
+        # Add a card for each dashboard
+        for i, (name, config) in enumerate(DASHBOARDS.items()):
+            with cols[i % 3]:
+                st.markdown(f"""
+                <div class="dashboard-card">
+                    <h3>{config.get('icon', '')} {name}</h3>
+                    <p>{config.get('description', '')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Add button below each card
+                if st.button(f"View {name}", key=f"btn_{config['module']}", use_container_width=True):
+                    st.session_state.current_dashboard = name
+                    # Update URL params
+                    dashboard_slug = name.lower().replace(" ", "-")
+                    st.query_params["dashboard"] = dashboard_slug
+                    st.query_params["network"] = st.session_state.network
+                    st.query_params["time_window"] = st.session_state.time_window
+                    st.rerun()
     
-    # Custom CSS for better cards
-    st.markdown("""
-    <style>
-    .dashboard-card {
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        margin: 10px 0;
-        background-color: #ffffff;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        height: 100%;
-    }
-    .dashboard-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-    }
-    .dashboard-card h3 {
-        color: #1E88E5;
-        margin-bottom: 10px;
-    }
-    .dashboard-card p {
-        color: #616161;
-        margin-bottom: 15px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.divider()
     
-    # Create a grid of dashboard cards
-    cols = st.columns(3)
-    
-    # Add a card for each dashboard
-    for i, (name, config) in enumerate(DASHBOARDS.items()):
-        with cols[i % 3]:
-            st.markdown(f"""
-            <div class="dashboard-card">
-                <h3>{config.get('icon', '')} {name}</h3>
-                <p>{config.get('description', '')}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Add button below each card
-            if st.button(f"View {name}", key=f"btn_{config['module']}", use_container_width=True):
-                st.session_state.current_dashboard = name
-                # Update URL params
-                dashboard_slug = name.lower().replace(" ", "-")
-                st.query_params["dashboard"] = dashboard_slug
-                st.query_params["network"] = st.session_state.network
-                st.query_params["time_window"] = st.session_state.time_window
-                st.rerun()
-    
-    # Add more information at the bottom
-    st.markdown("---")
-    st.markdown("""
-    ### About Xatu Dashboard
-    
-    This dashboard provides insights into Ethereum network data collected by Xatu. 
-    Use the sidebar to navigate between dashboards and adjust settings.
-    """)
+    with st.container():
+        # Add more information at the bottom
+        st.markdown("""
+        ### About Xatu Dashboard
+        
+        This dashboard provides insights into Ethereum network data collected by Xatu.
+        Use the sidebar to navigate between dashboards and adjust settings.
+        """)
 else:
     # Load and render the selected dashboard
     dashboard_config = DASHBOARDS.get(current_dashboard)

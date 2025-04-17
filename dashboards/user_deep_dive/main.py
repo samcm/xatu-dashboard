@@ -5,6 +5,7 @@ import logging
 import urllib.parse
 from utils import load_xatu_data, load_xatu_data_range
 from config import SUPPORTED_NETWORKS, TIME_WINDOWS, DEFAULT_REFRESH_TIME
+from chart_utils import create_themed_histogram
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -238,48 +239,49 @@ def render_user_overview(user_df, username):
     
     st.subheader(f"Overview for {username}")
     
-    # Basic stats
-    col1, col2, col3 = st.columns(3)
-    
-    # Get unique node count based on node_id
-    node_count = user_df.select(pl.col("node_id").n_unique()).item()
-    
-    # Get node locations
-    locations = user_df.filter(
-        ~pl.col("meta_client_geo_city").is_null() & 
-        (pl.col("meta_client_geo_city") != "REDACTED")
-    ).select(
-        pl.concat_str(
-            pl.col("meta_client_geo_city"), 
-            pl.lit(", "), 
-            pl.col("meta_client_geo_country_code")
-        ).alias("location")
-    ).unique().select("location").to_series().to_list()
-    
-    # Client implementations
-    implementations = user_df.select(pl.col("meta_consensus_implementation")).unique().to_series().to_list()
-    
-    # Display stats
-    with col1:
-        st.metric("Node Count", node_count)
-    
-    with col2:
-        st.metric("Total Events", user_df.height)
-    
-    with col3:
-        st.metric("Client Implementations", ", ".join(implementations))
-    
-    # Show locations if available
-    if locations:
-        st.write("Node Locations:")
-        st.write(", ".join(locations))
-    else:
-        st.write("Node Locations: Not available (redacted)")
-    
-    # Show client versions
-    versions = user_df.select(pl.col("meta_consensus_version")).unique().to_series().to_list()
-    st.write("Client Versions:")
-    st.write(", ".join(versions))
+    with st.container():
+        # Basic stats
+        col1, col2, col3 = st.columns(3)
+        
+        # Get unique node count based on node_id
+        node_count = user_df.select(pl.col("node_id").n_unique()).item()
+        
+        # Get node locations
+        locations = user_df.filter(
+            ~pl.col("meta_client_geo_city").is_null() &
+            (pl.col("meta_client_geo_city") != "REDACTED")
+        ).select(
+            pl.concat_str(
+                pl.col("meta_client_geo_city"),
+                pl.lit(", "),
+                pl.col("meta_client_geo_country_code")
+            ).alias("location")
+        ).unique().select("location").to_series().to_list()
+        
+        # Client implementations
+        implementations = user_df.select(pl.col("meta_consensus_implementation")).unique().to_series().to_list()
+        
+        # Display stats
+        with col1:
+            st.metric("Node Count", node_count)
+        
+        with col2:
+            st.metric("Total Events", user_df.height)
+        
+        with col3:
+            st.metric("Client Implementations", ", ".join(implementations))
+        
+        # Show locations if available
+        if locations:
+            st.write("Node Locations:")
+            st.write(", ".join(locations))
+        else:
+            st.write("Node Locations: Not available (redacted)")
+        
+        # Show client versions
+        versions = user_df.select(pl.col("meta_consensus_version")).unique().to_series().to_list()
+        st.write("Client Versions:")
+        st.write(", ".join(versions))
 
 def render_node_details(user_df):
     """Render details for individual nodes of the user"""
@@ -288,105 +290,106 @@ def render_node_details(user_df):
     
     st.subheader("Node Details")
     
-    # Add info about node deep dive links
-    network = st.session_state.network
-    username = user_df.select("username").head(1).item() if user_df.height > 0 else None
-    
-    if username:
-        st.info("Click on a Node ID in the table below to view detailed metrics for that specific node.")
-    
-    # Handle missing node_id column
-    if "node_id" not in user_df.columns:
-        user_df = user_df.with_columns(
-            pl.col("meta_client_name").map_elements(extract_node_id, return_dtype=pl.Utf8).alias("node_id")
-        )
-    
-    try:
-        # Filter out null node_ids to avoid group_by issues
-        filtered_df = user_df.filter(pl.col("node_id").is_not_null())
+    with st.container():
+        # Add info about node deep dive links
+        network = st.session_state.network
+        username = user_df.select("username").head(1).item() if user_df.height > 0 else None
         
-        if filtered_df.height == 0:
-            st.warning("No valid node data available")
-            return
+        if username:
+            st.info("Click on a Node ID in the table below to view detailed metrics for that specific node.")
         
-        # Get unique node IDs
-        unique_ids = list(set(filtered_df.select("node_id").to_series().to_list()))
-        logger.info(f"Found {len(unique_ids)} unique node IDs")
-        
-        # Create a list to hold node data
-        rows = []
-        
-        # Process each node ID
-        for node_id in unique_ids:
-            node_rows = filtered_df.filter(pl.col("node_id") == node_id)
-            
-            # Get the first row for this node
-            first_row = node_rows.head(1)
-            
-            # Add basic data
-            row_data = {
-                "Node ID": node_id,
-                "Events": node_rows.height
-            }
-            
-            # Add client implementation if available
-            if "meta_consensus_implementation" in first_row.columns:
-                row_data["Implementation"] = first_row.select("meta_consensus_implementation").item()
-            
-            # Add client version if available
-            if "meta_consensus_version" in first_row.columns:
-                row_data["Version"] = first_row.select("meta_consensus_version").item()
-            
-            # Add location if available
-            if "meta_client_geo_city" in first_row.columns and "meta_client_geo_country_code" in first_row.columns:
-                city = first_row.select("meta_client_geo_city").item()
-                country = first_row.select("meta_client_geo_country_code").item()
-                
-                if city and city != "REDACTED" and country:
-                    row_data["Location"] = f"{city}, {country}"
-                else:
-                    row_data["Location"] = "Location Redacted"
-            
-            # Add network provider if available
-            if "meta_client_geo_autonomous_system_organization" in first_row.columns:
-                asn = first_row.select("meta_client_geo_autonomous_system_organization").item()
-                
-                if asn and asn != "REDACTED":
-                    row_data["Network Provider"] = asn
-                else:
-                    row_data["Network Provider"] = "ASN Redacted"
-            
-            rows.append(row_data)
-        
-        # Create DataFrame from the rows and sort by event count
-        if rows:
-            # Convert to DataFrame
-            nodes_df = pl.from_dicts(rows)
-            nodes_df = nodes_df.sort("Events", descending=True)
-            
-            # Create node deep dive links
-            # Convert to pandas for easier manipulation and display
-            nodes_pd = nodes_df.to_pandas()
-            
-            # Create clickable links for Node IDs
-            nodes_pd["Node ID"] = nodes_pd.apply(
-                lambda row: f"[{row['Node ID']}](/?dashboard=node-deep-dive&network={network}&node_id={row['Node ID']}&username={username})", 
-                axis=1
+        # Handle missing node_id column
+        if "node_id" not in user_df.columns:
+            user_df = user_df.with_columns(
+                pl.col("meta_client_name").map_elements(extract_node_id, return_dtype=pl.Utf8).alias("node_id")
             )
+        
+        try:
+            # Filter out null node_ids to avoid group_by issues
+            filtered_df = user_df.filter(pl.col("node_id").is_not_null())
             
-            # Display with markdown for clickable links
-            st.markdown("### Node List")
-            st.markdown("Click on a Node ID to view detailed metrics:")
-            st.markdown(nodes_pd.to_markdown(index=False), unsafe_allow_html=True)
+            if filtered_df.height == 0:
+                st.warning("No valid node data available")
+                return
             
-            # As a fallback, also show as a regular table
-            st.dataframe(nodes_df.to_pandas(), use_container_width=True)
-        else:
-            st.warning("No node data to display")
-    
-    except Exception as e:
-        st.error(f"Error displaying node details: {str(e)}")
-        logger.error(f"Error in render_node_details: {str(e)}")
+            # Get unique node IDs
+            unique_ids = list(set(filtered_df.select("node_id").to_series().to_list()))
+            logger.info(f"Found {len(unique_ids)} unique node IDs")
+            
+            # Create a list to hold node data
+            rows = []
+            
+            # Process each node ID
+            for node_id in unique_ids:
+                node_rows = filtered_df.filter(pl.col("node_id") == node_id)
+                
+                # Get the first row for this node
+                first_row = node_rows.head(1)
+                
+                # Add basic data
+                row_data = {
+                    "Node ID": node_id,
+                    "Events": node_rows.height
+                }
+                
+                # Add client implementation if available
+                if "meta_consensus_implementation" in first_row.columns:
+                    row_data["Implementation"] = first_row.select("meta_consensus_implementation").item()
+                
+                # Add client version if available
+                if "meta_consensus_version" in first_row.columns:
+                    row_data["Version"] = first_row.select("meta_consensus_version").item()
+                
+                # Add location if available
+                if "meta_client_geo_city" in first_row.columns and "meta_client_geo_country_code" in first_row.columns:
+                    city = first_row.select("meta_client_geo_city").item()
+                    country = first_row.select("meta_client_geo_country_code").item()
+                    
+                    if city and city != "REDACTED" and country:
+                        row_data["Location"] = f"{city}, {country}"
+                    else:
+                        row_data["Location"] = "Location Redacted"
+                
+                # Add network provider if available
+                if "meta_client_geo_autonomous_system_organization" in first_row.columns:
+                    asn = first_row.select("meta_client_geo_autonomous_system_organization").item()
+                    
+                    if asn and asn != "REDACTED":
+                        row_data["Network Provider"] = asn
+                    else:
+                        row_data["Network Provider"] = "ASN Redacted"
+                
+                rows.append(row_data)
+            
+            # Create DataFrame from the rows and sort by event count
+            if rows:
+                # Convert to DataFrame
+                nodes_df = pl.from_dicts(rows)
+                nodes_df = nodes_df.sort("Events", descending=True)
+                
+                # Create node deep dive links
+                # Convert to pandas for easier manipulation and display
+                nodes_pd = nodes_df.to_pandas()
+                
+                # Create clickable links for Node IDs
+                nodes_pd["Node ID"] = nodes_pd.apply(
+                    lambda row: f"[{row['Node ID']}](/?dashboard=node-deep-dive&network={network}&node_id={row['Node ID']}&username={username})",
+                    axis=1
+                )
+                
+                # Display with markdown for clickable links
+                st.markdown("### Node List")
+                st.markdown("Click on a Node ID to view detailed metrics:")
+                st.markdown(nodes_pd.to_markdown(index=False), unsafe_allow_html=True)
+                
+                # As a fallback, also show as a regular table
+                st.dataframe(nodes_df.to_pandas(), use_container_width=True)
+            else:
+                st.warning("No node data to display")
+        
+        except Exception as e:
+            st.error(f"Error displaying node details: {str(e)}")
+            logger.error(f"Error in render_node_details: {str(e)}")
 
 def render_performance_metrics(user_df):
     """Render performance metrics for the user"""
@@ -395,84 +398,86 @@ def render_performance_metrics(user_df):
     
     st.subheader("Performance Metrics")
     
-    # For block events, analyze propagation times
-    if "propagation_slot_start_diff" in user_df.columns:
-        # Calculate stats for propagation time
-        prop_metrics = user_df.select([
-            pl.min("propagation_slot_start_diff").alias("min"),
-            pl.mean("propagation_slot_start_diff").alias("mean"),
-            pl.median("propagation_slot_start_diff").alias("median"),
-            pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
-        ])
-        
-        # Display metrics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Min Propagation", f"{prop_metrics.item(0, 'min'):.2f}ms")
-        
-        with col2:
-            st.metric("Mean Propagation", f"{prop_metrics.item(0, 'mean'):.2f}ms")
-        
-        with col3:
-            st.metric("Median Propagation", f"{prop_metrics.item(0, 'median'):.2f}ms")
-        
-        with col4:
-            st.metric("P90 Propagation", f"{prop_metrics.item(0, 'p90'):.2f}ms")
-        
-        # Create a histogram of propagation times
-        try:
-            # Try to import required libraries
-            import pandas as pd
+    with st.container():
+        # For block events, analyze propagation times
+        if "propagation_slot_start_diff" in user_df.columns:
+            # Calculate stats for propagation time
+            prop_metrics = user_df.select([
+                pl.min("propagation_slot_start_diff").alias("min"),
+                pl.mean("propagation_slot_start_diff").alias("mean"),
+                pl.median("propagation_slot_start_diff").alias("median"),
+                pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
+            ])
             
-            # Check if plotly is available
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Min Propagation", f"{prop_metrics.item(0, 'min'):.2f}ms")
+            
+            with col2:
+                st.metric("Mean Propagation", f"{prop_metrics.item(0, 'mean'):.2f}ms")
+            
+            with col3:
+                st.metric("Median Propagation", f"{prop_metrics.item(0, 'median'):.2f}ms")
+            
+            with col4:
+                st.metric("P90 Propagation", f"{prop_metrics.item(0, 'p90'):.2f}ms")
+            
+            # Create a histogram of propagation times
             try:
-                import plotly.express as px
-                has_plotly = True
-            except ImportError:
-                has_plotly = False
-                st.warning("Plotly is not installed. Install with: `pip install plotly`")
-            
-            if has_plotly:
-                # Prepare the data - limit to reasonable values for better visualization
-                prop_df = user_df.filter(pl.col("propagation_slot_start_diff") < 5000) \
-                            .select("propagation_slot_start_diff") \
-                            .to_pandas()
+                # Try to import required libraries
+                import pandas as pd
                 
-                # Create histogram
+                # Check if plotly is available
                 try:
-                    fig = px.histogram(
-                        prop_df, 
-                        x="propagation_slot_start_diff",
-                        nbins=50,
-                        labels={"propagation_slot_start_diff": "Propagation Time (ms)"},
-                        title="Distribution of Block Propagation Times"
-                    )
+                    import plotly.express as px
+                    has_plotly = True
+                except ImportError:
+                    has_plotly = False
+                    st.warning("Plotly is not installed. Install with: `pip install plotly`")
+                
+                if has_plotly:
+                    # Prepare the data - limit to reasonable values for better visualization
+                    prop_df = user_df.filter(pl.col("propagation_slot_start_diff") < 5000) \
+                                .select("propagation_slot_start_diff") \
+                                .to_pandas()
                     
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as plot_error:
-                    st.error(f"Error creating plot: {str(plot_error)}")
-                    logger.error(f"Plot error: {str(plot_error)}")
-            else:
-                # Fallback to showing summary stats if no plotly
-                st.write("Propagation time distribution summary:")
-                percentiles = user_df.select([
-                    pl.quantile("propagation_slot_start_diff", 0.1).alias("p10"),
-                    pl.quantile("propagation_slot_start_diff", 0.25).alias("p25"),
-                    pl.quantile("propagation_slot_start_diff", 0.5).alias("p50"),
-                    pl.quantile("propagation_slot_start_diff", 0.75).alias("p75"),
-                    pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
-                    pl.quantile("propagation_slot_start_diff", 0.95).alias("p95"),
-                    pl.quantile("propagation_slot_start_diff", 0.99).alias("p99"),
-                ])
-                
-                st.dataframe(percentiles.to_pandas())
-                
-        except Exception as e:
-            logger.error(f"Error creating propagation histogram: {str(e)}")
-            st.error(f"Error creating propagation histogram: {str(e)}")
-    else:
-        st.info("No propagation metrics available in the data")
+                    # Create histogram
+                    try:
+                        fig = create_themed_histogram(
+                            prop_df,
+                            x="propagation_slot_start_diff",
+                            nbins=50,
+                            title="Distribution of Block Propagation Times",
+                            xaxis_title="Propagation Time (ms)",
+                            yaxis_title="Count"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    except Exception as plot_error:
+                        st.error(f"Error creating plot: {str(plot_error)}")
+                        logger.error(f"Plot error: {str(plot_error)}")
+                else:
+                    # Fallback to showing summary stats if no plotly
+                    st.write("Propagation time distribution summary:")
+                    percentiles = user_df.select([
+                        pl.quantile("propagation_slot_start_diff", 0.1).alias("p10"),
+                        pl.quantile("propagation_slot_start_diff", 0.25).alias("p25"),
+                        pl.quantile("propagation_slot_start_diff", 0.5).alias("p50"),
+                        pl.quantile("propagation_slot_start_diff", 0.75).alias("p75"),
+                        pl.quantile("propagation_slot_start_diff", 0.9).alias("p90"),
+                        pl.quantile("propagation_slot_start_diff", 0.95).alias("p95"),
+                        pl.quantile("propagation_slot_start_diff", 0.99).alias("p99"),
+                    ])
+                    
+                    st.dataframe(percentiles.to_pandas())
+                    
+            except Exception as e:
+                logger.error(f"Error creating propagation histogram: {str(e)}")
+                st.error(f"Error creating propagation histogram: {str(e)}")
+        else:
+            st.info("No propagation metrics available in the data")
 
 def render(force_refresh=False):
     """Render the user deep dive dashboard"""
@@ -573,8 +578,12 @@ Try:
         # Overview
         render_user_overview(user_df, selected_username)
         
+        st.divider()
+        
         # Node details
         render_node_details(user_df)
+        
+        st.divider()
         
         # Performance metrics
         render_performance_metrics(user_df)

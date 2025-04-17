@@ -1,0 +1,42 @@
+/* Custom CSS for Xatu Dashboard */
+
+/* Global styles */
+body {
+  font-family: 'sans-serif';
+  color: #31333F;
+}
+
+/* Header styling */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+}
+
+/* Dashboard card enhancements */
+.dashboard-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Button styling */
+.stButton > button {
+  border-radius: 4px;
+}
+
+/* Sidebar enhancements */
+.sidebar .sidebar-content {
+  background-color: #F5F5F5;
+}
+
+/* Widget styling */
+.stSelectbox, .stCheckbox {
+  margin-bottom: 1rem;
+}
+
+/* Table styling */
+.dataframe {
+  border-collapse: collapse;
+}
+
+.dataframe th {
+  background-color: #F0F2F6;
+  font-weight: 600;
+}
